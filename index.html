@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Ricarica automatica ogni 30 minuti (1800 s) -->
+<meta http-equiv="refresh" content="1800">
+<title>Meteo Ficarra</title>
+<style>
+  /* Ottimizzato per Kindle Paperwhite (e-ink, 16 grigi): solo nero/bianco/grigio, niente animazioni */
+  html, body { margin: 0; padding: 0; background: #fff; color: #000; }
+  body { font-family: Georgia, "Bookerly", serif; font-size: 20px; line-height: 1.2; }
+  .wrap { padding: 3% 5%; }
+  .top { width: 100%; border-collapse: collapse; }
+  .top td { vertical-align: bottom; padding: 0; }
+  .luogo { font-size: 1.5em; font-weight: bold; }
+  .data { font-size: 1em; text-align: right; }
+  .ora { font-size: 2.2em; font-weight: bold; text-align: right; line-height: 1; }
+  hr { border: 0; border-top: 3px solid #000; margin: 10px 0; }
+  hr.sottile { border-top: 1px solid #000; }
+
+  .now { width: 100%; border-collapse: collapse; }
+  .now td { vertical-align: middle; padding: 0; }
+  .icona-big { width: 38%; text-align: center; }
+  .icona-big svg { width: 100%; max-width: 200px; height: auto; }
+  .temp { font-size: 4.8em; font-weight: bold; line-height: 1; }
+  .desc { font-size: 1.4em; margin-top: 6px; }
+  .minmax { font-size: 1.1em; margin-top: 6px; }
+
+  .dettagli { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .dettagli td { width: 25%; text-align: center; padding: 5px 2px; border: 2px solid #000; }
+  .lab { font-size: 0.75em; text-transform: uppercase; letter-spacing: 1px; }
+  .val { font-size: 1.3em; font-weight: bold; }
+
+  h2 { font-size: 1em; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 8px 0; }
+
+  .ore { width: 100%; border-collapse: collapse; }
+  .ore td { text-align: center; padding: 4px 0; width: 12.5%; }
+  .ore .h { font-size: 0.85em; }
+  .ore svg { width: 40px; height: 40px; }
+  .ore .t { font-size: 1.15em; font-weight: bold; }
+  .ore .p { font-size: 0.8em; }
+
+  .giorni { width: 100%; border-collapse: collapse; }
+  .giorni td { padding: 4px 4px; border-bottom: 1px solid #000; vertical-align: middle; }
+  .giorni tr:last-child td { border-bottom: 0; }
+  .giorni .g { font-weight: bold; width: 26%; }
+  .giorni .ic { width: 14%; text-align: center; }
+  .giorni .ic svg { width: 46px; height: 46px; }
+  .giorni .d { width: 30%; font-size: 0.9em; }
+  .giorni .mm { width: 18%; text-align: right; font-size: 1.15em; }
+  .giorni .pp { width: 12%; text-align: right; font-size: 0.9em; }
+
+  .piede { margin-top: 6px; font-size: 0.8em; width: 100%; border-collapse: collapse; }
+  .piede td { padding: 0; }
+  .btn { display: inline-block; border: 2px solid #000; padding: 8px 18px; font-size: 1.1em;
+         font-weight: bold; color: #000; text-decoration: none; background: #fff; }
+  .errore { border: 3px solid #000; padding: 16px; margin: 20px 0; font-size: 1.1em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <table class="top"><tr>
+    <td><div class="luogo">Ficarra</div><div id="sole">Messina</div></td>
+    <td><div class="ora" id="ora">--:--</div><div class="data" id="data">&nbsp;</div></td>
+  </tr></table>
+  <hr>
+
+  <div id="errore" class="errore" style="display:none"></div>
+
+  <table class="now"><tr>
+    <td class="icona-big" id="icona-now"></td>
+    <td style="padding-left:4%">
+      <div class="temp" id="temp">--°</div>
+      <div class="desc" id="desc">Caricamento…</div>
+      <div class="minmax" id="minmax">&nbsp;</div>
+    </td>
+  </tr></table>
+
+  <table class="dettagli"><tr>
+    <td><div class="lab">Percepita</div><div class="val" id="perc">--</div></td>
+    <td><div class="lab">Umidità</div><div class="val" id="umid">--</div></td>
+    <td><div class="lab">Vento</div><div class="val" id="vento">--</div></td>
+    <td><div class="lab">Pioggia</div><div class="val" id="pioggia">--</div></td>
+  </tr></table>
+
+  <hr class="sottile">
+  <h2>Prossime ore</h2>
+  <table class="ore"><tr id="ore-h"></tr><tr id="ore-i"></tr><tr id="ore-t"></tr><tr id="ore-p"></tr></table>
+
+  <hr class="sottile">
+  <h2>Prossimi giorni</h2>
+  <table class="giorni" id="giorni"></table>
+
+  <hr>
+  <table class="piede"><tr>
+    <td id="agg">Aggiornamento automatico ogni 30 minuti</td>
+    <td style="text-align:right"><a class="btn" href="javascript:location.reload()">Aggiorna</a></td>
+  </tr></table>
+</div>
+
+<script>
+/* JavaScript ES5 senza fetch/arrow/template string: compatibile anche con i browser Kindle più vecchi */
+var LAT = 38.1086, LON = 14.8303; // Ficarra (ME)
+
+var GIORNI = ["Domenica","Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato"];
+var MESI = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
+
+/* Codici WMO -> [descrizione, tipo icona] */
+function meteo(code) {
+  var c = Number(code);
+  if (c === 0) return ["Sereno", "sole"];
+  if (c === 1) return ["Prevalentemente sereno", "sole"];
+  if (c === 2) return ["Parzialmente nuvoloso", "solenube"];
+  if (c === 3) return ["Coperto", "nube"];
+  if (c === 45 || c === 48) return ["Nebbia", "nebbia"];
+  if (c >= 51 && c <= 57) return ["Pioviggine", "pioggia"];
+  if (c >= 61 && c <= 67) return [c <= 61 ? "Pioggia debole" : (c >= 65 ? "Pioggia forte" : "Pioggia"), "pioggia"];
+  if (c >= 71 && c <= 77) return ["Neve", "neve"];
+  if (c >= 80 && c <= 82) return ["Rovesci", "pioggia"];
+  if (c === 85 || c === 86) return ["Rovesci di neve", "neve"];
+  if (c >= 95) return ["Temporale", "temporale"];
+  return ["—", "nube"];
+}
+
+/* Icone SVG in bianco e nero, nitide su e-ink */
+var NUBE = '<path d="M30 74h44a16 16 0 0 0 0-32 22 22 0 0 0-42-6 18 18 0 0 0-2 38z" fill="#fff" stroke="#000" stroke-width="5" stroke-linejoin="round"/>';
+function svgSole(cx, cy, r) {
+  var s = '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="#000"/>';
+  for (var i = 0; i < 8; i++) {
+    var a = i * Math.PI / 4, r1 = r + 6, r2 = r + 15;
+    s += '<line x1="'+(cx+r1*Math.cos(a)).toFixed(1)+'" y1="'+(cy+r1*Math.sin(a)).toFixed(1)+
+         '" x2="'+(cx+r2*Math.cos(a)).toFixed(1)+'" y2="'+(cy+r2*Math.sin(a)).toFixed(1)+
+         '" stroke="#000" stroke-width="5" stroke-linecap="round"/>';
+  }
+  return s;
+}
+function icona(tipo) {
+  var b = '';
+  if (tipo === "sole") b = svgSole(50, 50, 20);
+  else if (tipo === "solenube") b = svgSole(32, 30, 13) + NUBE;
+  else if (tipo === "nube") b = NUBE;
+  else if (tipo === "pioggia") b = '<g transform="translate(0,-10)">' + NUBE + '</g>' +
+      '<g stroke="#000" stroke-width="5" stroke-linecap="round"><line x1="36" y1="72" x2="30" y2="88"/><line x1="54" y1="72" x2="48" y2="88"/><line x1="72" y1="72" x2="66" y2="88"/></g>';
+  else if (tipo === "neve") b = '<g transform="translate(0,-10)">' + NUBE + '</g>' +
+      '<g fill="#000"><circle cx="34" cy="80" r="5"/><circle cx="52" cy="86" r="5"/><circle cx="70" cy="80" r="5"/></g>';
+  else if (tipo === "temporale") b = '<g transform="translate(0,-10)">' + NUBE + '</g>' +
+      '<path d="M54 66 L40 84 H52 L46 98 L64 76 H52 L58 66 Z" fill="#000"/>';
+  else if (tipo === "nebbia") b = '<g stroke="#000" stroke-width="6" stroke-linecap="round"><line x1="16" y1="34" x2="84" y2="34"/><line x1="24" y1="50" x2="76" y2="50"/><line x1="16" y1="66" x2="84" y2="66"/><line x1="28" y1="82" x2="72" y2="82"/></g>';
+  return '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">' + b + '</svg>';
+}
+
+function pad(n) { return (n < 10 ? "0" : "") + n; }
+function $(id) { return document.getElementById(id); }
+function testo(id, t) { $(id).innerHTML = ""; $(id).appendChild(document.createTextNode(t)); }
+
+function direzione(gradi) {
+  var d = ["N","NE","E","SE","S","SO","O","NO"];
+  return d[Math.round(gradi / 45) % 8];
+}
+
+/* "2026-10-29T14:00" -> Date locale senza conversioni di fuso */
+function parseLocale(s) {
+  var p = s.split(/[-T:]/);
+  return new Date(+p[0], +p[1] - 1, +p[2], +(p[3] || 0), +(p[4] || 0));
+}
+
+function orologio() {
+  var n = new Date();
+  testo("ora", pad(n.getHours()) + ":" + pad(n.getMinutes()));
+  testo("data", GIORNI[n.getDay()] + " " + n.getDate() + " " + MESI[n.getMonth()]);
+}
+
+function mostra(j) {
+  var c = j.current, d = j.daily, h = j.hourly;
+  var m = meteo(c.weather_code);
+
+  $("icona-now").innerHTML = icona(m[1]);
+  testo("temp", Math.round(c.temperature_2m) + "°");
+  testo("desc", m[0]);
+  testo("minmax", "Max " + Math.round(d.temperature_2m_max[0]) + "°  ·  Min " + Math.round(d.temperature_2m_min[0]) + "°");
+  testo("perc", Math.round(c.apparent_temperature) + "°");
+  testo("umid", Math.round(c.relative_humidity_2m) + "%");
+  testo("vento", Math.round(c.wind_speed_10m) + " " + direzione(c.wind_direction_10m));
+  testo("pioggia", (d.precipitation_probability_max[0] == null ? "--" : d.precipitation_probability_max[0]) + "%");
+  testo("sole", "Alba " + d.sunrise[0].slice(11, 16) + "  ·  Tramonto " + d.sunset[0].slice(11, 16));
+
+  // Prossime 8 fasce, una ogni 2 ore a partire dall'ora corrente
+  var adesso = parseLocale(c.time), start = 0;
+  for (var i = 0; i < h.time.length; i++) {
+    if (parseLocale(h.time[i]) >= adesso) { start = i; break; }
+  }
+  var rh = "", ri = "", rt = "", rp = "";
+  for (var k = 0; k < 8; k++) {
+    var x = start + 1 + k * 2;
+    if (x >= h.time.length) break;
+    rh += '<td class="h">' + h.time[x].slice(11, 13) + '</td>';
+    ri += '<td>' + icona(meteo(h.weather_code[x])[1]) + '</td>';
+    rt += '<td class="t">' + Math.round(h.temperature_2m[x]) + '°</td>';
+    rp += '<td class="p">' + (h.precipitation_probability[x] == null ? "" : h.precipitation_probability[x] + "%") + '</td>';
+  }
+  $("ore-h").innerHTML = rh; $("ore-i").innerHTML = ri; $("ore-t").innerHTML = rt; $("ore-p").innerHTML = rp;
+
+  // Prossimi 4 giorni (escluso oggi)
+  var g = "";
+  for (var n = 1; n < d.time.length && n <= 4; n++) {
+    var dm = meteo(d.weather_code[n]), dt = parseLocale(d.time[n]);
+    g += '<tr><td class="g">' + (n === 1 ? "Domani" : GIORNI[dt.getDay()]) + '</td>' +
+         '<td class="ic">' + icona(dm[1]) + '</td>' +
+         '<td class="d">' + dm[0] + '</td>' +
+         '<td class="mm"><b>' + Math.round(d.temperature_2m_max[n]) + '°</b> / ' + Math.round(d.temperature_2m_min[n]) + '°</td>' +
+         '<td class="pp">' + (d.precipitation_probability_max[n] == null ? "" : d.precipitation_probability_max[n] + "%") + '</td></tr>';
+  }
+  $("giorni").innerHTML = g;
+
+  var ora = new Date();
+  testo("agg", "Aggiornato alle " + pad(ora.getHours()) + ":" + pad(ora.getMinutes()) + " · prossimo tra 30 min");
+  $("errore").style.display = "none";
+}
+
+function errore(msg) {
+  $("errore").style.display = "block";
+  testo("errore", "Impossibile scaricare il meteo (" + msg + "). Verifica il Wi-Fi: nuovo tentativo tra 5 minuti.");
+  setTimeout(function () { location.reload(); }, 5 * 60 * 1000);
+}
+
+function carica() {
+  var url = "https://api.open-meteo.com/v1/forecast?latitude=" + LAT + "&longitude=" + LON +
+    "&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m" +
+    "&hourly=temperature_2m,precipitation_probability,weather_code" +
+    "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset" +
+    "&timezone=Europe%2FRome&forecast_days=5";
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", url, true);
+  xhr.timeout = 20000;
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState !== 4) return;
+    if (xhr.status === 200) {
+      try { mostra(JSON.parse(xhr.responseText)); } catch (e) { errore("dati non validi"); }
+    } else { errore(xhr.status ? "errore " + xhr.status : "nessuna connessione"); }
+  };
+  xhr.ontimeout = function () { errore("timeout"); };
+  xhr.send();
+}
+
+orologio();
+setInterval(orologio, 60 * 1000);   // l'orologio si aggiorna ogni minuto
+carica();
+setTimeout(function () { location.reload(); }, 30 * 60 * 1000); // ricarica completa ogni 30 min
+</script>
+</body>
+</html>
